@@ -18,6 +18,8 @@
 package org.apache.hadoop.hbase.master.cleaner;
 
 import java.io.IOException;
+import java.nio.file.DirectoryNotEmptyException;
+import java.rmi.RemoteException;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
@@ -538,7 +540,7 @@ public abstract class CleanerChore<T extends FileCleanerDelegate> extends Schedu
         result &= deleteAction(new Action<Boolean>() {
           @Override
           public Boolean act() throws IOException {
-            return fs.delete(dir, false);
+              return fs.delete(dir, false);
           }
         }, "dir");
       }
@@ -548,7 +550,7 @@ public abstract class CleanerChore<T extends FileCleanerDelegate> extends Schedu
     /**
      * Get FileStatus with filter.
      * @param function a filter function
-     * @return filtered FileStatus or empty list if dir doesn't exist
+     * @return filtered FileStatus or null if dir doesn't exist
      * @throws IOException if there's an error other than dir not existing
      */
     private List<FileStatus> getFilteredStatus(final Predicate<FileStatus> function) throws IOException {
@@ -578,13 +580,29 @@ public abstract class CleanerChore<T extends FileCleanerDelegate> extends Schedu
         // LocalFileSystem throws a bare IOException. So some test code will get the verbose
         // message below.
         LOG.debug("Couldn't delete '{}' yet because it isn't empty. Probably transient. " +
-            "exception details at TRACE.", dir);
+                "exception details at TRACE.", dir);
         LOG.trace("Couldn't delete '{}' yet because it isn't empty w/exception.", dir, exception);
         deleted = false;
+      } catch(RemoteException re) {
+        if(re.getCause() instanceof PathIsNotEmptyDirectoryException) {
+          // N.B. HDFS throws this exception when we try to delete a non-empty directory, but
+          // LocalFileSystem throws a bare IOException. So some test code will get the verbose
+          // message below.
+          LOG.debug("Couldn't delete '{}' yet because it isn't empty. Probably transient. " +
+                  "exception details at TRACE.", dir);
+          LOG.trace("Couldn't delete '{}' yet because it isn't empty w/exception.", dir, re);
+          deleted = false;
+
+        } else {
+          LOG.info("Could not delete {} under {}. might be transient; we'll retry. if it keeps " +
+                          "happening, use following exception when asking on mailing list.",
+                  type, dir, re);
+          deleted = false;
+        }
       } catch (IOException ioe) {
         LOG.info("Could not delete {} under {}. might be transient; we'll retry. if it keeps " +
-                  "happening, use following exception when asking on mailing list.",
-                  type, dir, ioe);
+                        "happening, use following exception when asking on mailing list.",
+                type, dir, ioe);
         deleted = false;
       }
       LOG.trace("Finish deleting {} under {}, deleted=", type, dir, deleted);
