@@ -96,6 +96,9 @@ class RegionLocationFinder {
             LOG.info("Attempting to refetch "+failed.size() +"  regions with 5 minute timeout");
             Map<HRegionInfo, ListenableFuture<HDFSBlocksDistribution>> newFailures = new HashMap<>();
             loadRegionsAsync(failed, result, newFailures, 10);
+            for (Map.Entry<HRegionInfo, ListenableFuture<HDFSBlocksDistribution>> entry : failed.entrySet()) {
+              entry.getValue().cancel(true);
+            }
           }
           LOG.info("Completed bulk RegionLocationFinder cache  for "+sizeHris+" regions");
           return result;
@@ -110,8 +113,7 @@ class RegionLocationFinder {
               result.put(hri, lf.get());
               if (result.size() % 5000 == 0) LOG.info("Loading completed of " + result.size() + " regions");
             } catch(TimeoutException te) {
-              lf.cancel(true);
-              LOG.info("Timeout getting region: " + hri.toString() + " after " + timeoutMinutes + " minutes", te);
+              LOG.info("Timeout getting region: " + hri.toString() + " after " + timeoutMinutes + " minutes");
               failed.put(hri, lf);
             } catch (InterruptedException ie) {
               lf.cancel(true);
