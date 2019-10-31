@@ -583,8 +583,8 @@ public abstract class CleanerChore<T extends FileCleanerDelegate> extends Schedu
                 "exception details at TRACE.", dir);
         LOG.trace("Couldn't delete '{}' yet because it isn't empty w/exception.", dir, exception);
         deleted = false;
-      } catch(RemoteException re) {
-        if(re.getCause() instanceof PathIsNotEmptyDirectoryException) {
+      } catch(org.apache.hadoop.ipc.RemoteException re) {
+        if(re.getCause() instanceof PathIsNotEmptyDirectoryException || re.getClassName().equals("org.apache.hadoop.fs.PathIsNotEmptyDirectoryException")) {
           // N.B. HDFS throws this exception when we try to delete a non-empty directory, but
           // LocalFileSystem throws a bare IOException. So some test code will get the verbose
           // message below.
