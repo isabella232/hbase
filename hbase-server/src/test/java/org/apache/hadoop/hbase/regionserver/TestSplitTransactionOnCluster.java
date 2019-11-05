@@ -910,7 +910,7 @@ public class TestSplitTransactionOnCluster {
    * @throws KeeperException
    * @throws DeserializationException
    */
-  @Test(timeout = 400000)
+  @Test(timeout = 500000)
   public void testMasterRestartWhenSplittingIsPartial()
       throws IOException, InterruptedException, NodeExistsException,
       KeeperException, DeserializationException, ServiceException {
@@ -965,11 +965,14 @@ public class TestSplitTransactionOnCluster {
 
       // Update the region to be offline and split, so that HRegionInfo#equals
       // returns true in checking rebuilt region states map.
+      ServerName regionServerOfRegion = master.getAssignmentManager()
+              .getRegionStates().getRegionServerOfRegion(hri);
+      assertTrue(regionServerOfRegion == null);
+
       hri.setOffline(true);
       hri.setSplit(true);
-      ServerName regionServerOfRegion = master.getAssignmentManager()
-        .getRegionStates().getRegionServerOfRegion(hri);
-      assertTrue(regionServerOfRegion != null);
+      waitOnRIT(hri);
+
 
       // Remove the block so that split can move ahead.
       AssignmentManager.TEST_SKIP_SPLIT_HANDLING = false;
@@ -983,8 +986,9 @@ public class TestSplitTransactionOnCluster {
       }
       assertNull("Waited too long for ZK node to be removed: "+node, data);
       RegionStates regionStates = master.getAssignmentManager().getRegionStates();
+      waitOnRIT(hri);
       assertTrue("Split parent should be in SPLIT state",
-        regionStates.isRegionInState(hri, State.SPLIT));
+        hri.isSplit());
       regionServerOfRegion = regionStates.getRegionServerOfRegion(hri);
       assertTrue(regionServerOfRegion == null);
     } finally {
